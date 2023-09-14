@@ -4,8 +4,8 @@ import pdfplumber
 import os
 import shutil
 import pandas as pd
-
-
+import shutil
+import zipfile
 class FapiaoShell(cmd.Cmd):
     """ 发票 """
 
@@ -16,12 +16,9 @@ class FapiaoShell(cmd.Cmd):
     undoc_header = "没有帮助文档:"
     nohelp = "*** 没有命令(%s)的帮助信息 "
     path = os.path.abspath('.')
-    is_taxation = path+'\\is_taxation'
-    isnot_taxation = path + '\\isnot_taxation'
-    if not os.path.exists(is_taxation):
-        os.mkdir(is_taxation)
-    if not os.path.exists(isnot_taxation):
-        os.mkdir(isnot_taxation)
+    is_taxation = path+'\\result\\is_taxation'
+    isnot_taxation = path + '\\result\\isnot_taxation'
+    result_xlsx = path + '\\result\\result.xlsx'
 
     def __init__(self):
         super().__init__()
@@ -31,7 +28,19 @@ class FapiaoShell(cmd.Cmd):
         if not os.path.isdir(arg):
             print('参数必须是目录!')
             return
-
+        if os.path.exists(self.result_xlsx):
+            os.remove(self.result_xlsx)
+        if os.path.exists(self.is_taxation):
+            shutil.rmtree(self.is_taxation)
+            os.mkdir(self.is_taxation)
+        if os.path.exists(self.isnot_taxation):
+            shutil.rmtree(self.isnot_taxation)
+            os.mkdir(self.isnot_taxation)
+        if not os.path.exists(self.is_taxation):
+            os.mkdir(self.is_taxation)
+        if not os.path.exists(self.isnot_taxation):
+            os.mkdir(self.isnot_taxation)
+        self.zip_file_path = 'C:\\Users\\haoci\\Desktop\\'+os.path.basename(arg)+'解析'
         os.chdir(os.path.dirname(arg))
         pdfs = []
         for root, _, files in os.walk(arg):
@@ -52,16 +61,22 @@ class FapiaoShell(cmd.Cmd):
         # for fpth, info in pdf_ctxs:
         #     total['总计'] += float(info['总计'])
         df = pd.DataFrame(pdf_ctxs)
-        df.to_excel(self.path+'\\result.xlsx', sheet_name='data')
+        df.to_excel(self.result_xlsx, sheet_name='data')
 
-        with open(self.path+'\\result.json', 'w', encoding='utf-8') as json_file:
-            json.dump(pdf_ctxs,
-                      json_file,
-                      ensure_ascii=False,
-                      sort_keys=True,
-                      indent=4,
-                      separators=(', ', ': '))
-        print('\n已保存到 result.json和result.xlsx...')
+        # with open(self.path+'\\result.json', 'w', encoding='utf-8') as json_file:
+        #     json.dump(pdf_ctxs,
+        #               json_file,
+        #               ensure_ascii=False,
+        #               sort_keys=True,
+        #               indent=4,
+        #               separators=(', ', ': '))
+        # print('\n已保存到 result.json和result.xlsx...')
+        print('\n已保存到result.xlsx...')
+        try:
+            shutil.make_archive(self.zip_file_path, 'zip', self.path+'\\result')
+            print(f"压缩成功，生成的zip文件位于 {self.zip_file_path}")
+        except Exception as e:
+            print(f"压缩文件时出错: {e}")
 
 
     def _parse_pdfs(self, pdfs):
@@ -172,6 +187,7 @@ class FapiaoShell(cmd.Cmd):
             for line in lines:
                 if '名　　　　称:' in line:
                     info['购买方名称'] = line.split(':')[1]
+
                     continue
 
                 # if len(line) == 18 and line.isalnum():
@@ -201,6 +217,8 @@ class FapiaoShell(cmd.Cmd):
                     info['税额'] = lines[-1][1:]
                     break
                 if '税率' in line:
+                # if '税率' in line and not info['购买方名称'] ==' 临沂申通快递有限公司':
+                # if '税率' in line and info['购买方名称'] == ' 临沂罗达智能物流有限公司':
                     if lines[-1] == '不征税':
                         shutil.copy(fpth, self.isnot_taxation)
                     else:
@@ -237,7 +255,6 @@ class FapiaoShell(cmd.Cmd):
 
 
 if __name__ == '__main__':
-
     try:
         FapiaoShell().cmdloop()
     except KeyboardInterrupt:
